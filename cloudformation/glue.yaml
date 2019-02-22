@@ -1,0 +1,46 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Creates an Aurora MySQL DB.
+
+Parameters:
+  SubnetId:
+    Description: The subnet of the Aurora instance.
+    Type: AWS::EC2::Subnet::Id
+    Default: subnet-4115c737
+  AvailabilityZone:
+    Description: The AZ of the Aurora instance.
+    Type: AWS::EC2::AvailabilityZone::Name
+    Default: us-west-2a
+  SecurityGroupIdList:
+    Description: The list of security groups to apply to the Glue Connection.
+    Type: List<AWS::EC2::SecurityGroup::Id>
+    Default: sg-ca7f99ac
+  JDBCConnectionString:
+    Type: String
+    Default: jdbc:mysql://air-quality.crwizazpv2rg.us-west-2.rds.amazonaws.com:3306/airquality
+  ConnectionUser:  
+    Type: String
+    Default: etl
+  ConnectionPassword:  
+    Type: String
+    Default: abcdefg
+    NoEcho: true
+
+Resources:
+  AuroraConnection:
+    Type: AWS::Glue::Connection
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      ConnectionInput:
+        Description: Connection information for the Aurora instance.
+        ConnectionType: JDBC
+        # MatchCriteria: airquality
+        PhysicalConnectionRequirements: 
+          AvailabilityZone: !Ref AvailabilityZone
+          SecurityGroupIdList: !Ref SecurityGroupIdList
+          SubnetId: !Ref SubnetId
+        ConnectionProperties: {
+          "JDBC_CONNECTION_URL": !Ref JDBCConnectionString,
+          "USERNAME": !Ref ConnectionUser,
+          "PASSWORD": !Ref ConnectionPassword
+        }
+        Name: AirQualityDB

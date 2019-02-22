@@ -1,0 +1,176 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Creates an Aurora MySQL DB.
+Parameters:
+  DBName:
+    Default: mydb
+    Description: The database name created within the instance. Must be 68 characters or less
+    Type: String
+    MinLength: '1'
+    MaxLength: '68'
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: must begin with a letter and contain only alphanumeric
+      characters.
+  DBUser:
+    Default: nsedba
+    Description: The database admin account username
+    Type: String
+    MinLength: '1'
+    MaxLength: '16'
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: must begin with a letter and contain only alphanumeric
+      characters.
+  DBPassword:
+    NoEcho: 'true'
+    Description: The database admin account password (must be 8 characters)
+    Type: String
+    MinLength: '8'
+    MaxLength: '41'
+    AllowedPattern: '[a-zA-Z0-9\.]*'
+    ConstraintDescription: must contain only alphanumeric characters.
+  DBSubnetGroupName:
+    Description: SSM Parameter that references DB Subnet Group that the instance should live in.
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: /env/primary/rds/subnetgroups/protected/id
+  VPC:
+    Description: SSM parameter for the VPC where the security group will be created.
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::VPC::Id>
+    Default: /env/primary/net/vpc/id
+
+# Metadata:
+#   AWS::CloudFormation::Interface:
+#     ParameterGroups:
+#       - 
+#         Label:
+#           default: Database Configuration
+#         Parameters:
+#           - DBIdentifierName
+#           - MySqlEngineVersion
+#           - AllowMajorVersionUpgrade
+#           - AutoMinorVersionUpgrade
+#           - DBName
+#           - DBUser
+#           - DBPassword
+#       - 
+#         Label:
+#           default: Backups Configuration
+#         Parameters:
+#           - RestoreFromSnapshot
+#           - RDSSnapshotName
+#           - BackupRetentionPeriod
+#       - 
+#         Label:
+#           default: Parameter & Option Group Configuration
+#         Parameters:
+#           - CreateParameterGroup
+#           - DBParameterGroup
+#           - ParameterGroupFamily
+#           - CreateOptionGroup
+#       - 
+#         Label:
+#           default: Instance Configuration
+#         Parameters:
+#           - InstanceClass
+#           - AllocatedStorage
+#           - DeletionProtection
+#           - KMSKeyAliasARN
+#       - 
+#         Label:
+#           default: Network Configuration
+#         Parameters:
+#           - MultiAZ
+#           - DBSubnetGroupName
+#           - VPC
+#           - VpcCidrBlock
+#       - 
+#         Label:
+#           default: Backups Configuration
+#         Parameters:
+#           - BackupRetentionPeriod
+#       -
+#         Label:
+#           default: Environment Parameters
+#         Parameters:
+#           - OrganizationPrefix
+#           - EnvVarNamespaceShortName
+#           - EnvironmentShortName
+
+# Conditions:
+#   ShouldCreateParameterGroup: !Equals [ !Ref CreateParameterGroup, true ]
+#   ShouldCreateOptionGroup: !Equals [ !Ref CreateOptionGroup, true ]
+#   KmsKeyEmpty: !Equals [ !Ref KMSKeyAliasARN, '' ]
+#   ShouldRestoreFromSnapshot: !Equals [ !Ref RestoreFromSnapshot, true ]
+
+Resources:
+  RDSInstance:
+    Type: AWS::RDS::DBCluster
+    Properties:
+      AvailabilityZones: us-west-2a
+      BackupRetentionPeriod: 1
+      DatabaseName: !Ref DBName
+      DBClusterIdentifier: !Sub ${AWS::StackName}
+
+      DBInstanceClass: db.t2.micro
+      DeletionProtection: false
+      AllocatedStorage: 20
+      StorageType: gp2
+      AllowMajorVersionUpgrade: false
+      AutoMinorVersionUpgrade: false
+      Engine: aurora-mysql
+      MasterUsername: !Ref DBUser
+      MasterUserPassword: !Ref DBPassword
+      DBParameterGroupName: !Ref DBParameterGroup
+      OptionGroupName: !If [ ShouldCreateOptionGroup, !Ref OptionGroup, !Ref "AWS::NoValue" ]
+      MultiAZ: false
+      DBSubnetGroupName: !Ref DBSubnetGroupName
+      StorageEncrypted: false
+      VPCSecurityGroups:
+        - !Ref SecurityGroup
+      CopyTagsToSnapshot: true
+      Tags:
+        - Key: Creator
+          Value: Alex
+        - Key: Project
+          Value: ML Demo
+  ParamGroup:
+    Type: AWS::RDS::DBParameterGroup
+    Condition: ShouldCreateParameterGroup
+    Properties:
+      Family: !Ref ParameterGroupFamily
+      Description: !Sub Parameter group for ${DBIdentifierName}
+  OptionGroup:
+    Type: AWS::RDS::OptionGroup
+    Condition: ShouldCreateOptionGroup
+    Properties: 
+      EngineName: mysql
+      MajorEngineVersion: 5.5
+      OptionGroupDescription: !Sub ${AWS::StackName} - RDS Option Group
+      OptionConfigurations:
+        -
+          OptionName: MEMCACHED
+      Tags:
+        - Key: Team
+          Value: DBAs
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: 
+      GroupDescription: !Sub ${AWS::StackName} - RDS Security Group
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Team
+          Value: DBAs
+  VpcDbIngressSgRule:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: Allow VPC
+      CidrIp: !Ref VpcCidrBlock
+      FromPort: !GetAtt 'RDSInstance.Endpoint.Port'
+      IpProtocol: tcp
+      ToPort: !GetAtt 'RDSInstance.Endpoint.Port'
+      GroupId: !Ref SecurityGroup
+
+Outputs:
+  ConnectionEndpoint:
+    Description: Connection endpoint for the database
+    Value: !Join [ '', [ !GetAtt 'RDSInstance.Endpoint.Address', ':', !GetAtt 'RDSInstance.Endpoint.Port' ] ]
+        # Joining a string (https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/intrinsic-function-reference-join.html)
