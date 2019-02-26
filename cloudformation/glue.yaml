@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Creates an Aurora MySQL DB.
+Description: Creates a Glue connection object to an Aurora MySQL DB.
 
 Parameters:
   SubnetId:
@@ -26,6 +26,42 @@ Parameters:
     NoEcho: true
 
 Resources:
+# Build connection role for access to the RDS instance
+  GlueRole: 
+    Type: AWS::IAM::Role
+    Properties:
+      Policies:
+        - 
+          PolicyName: airquality-s3-policy
+          PolicyDocument: 
+            Version: 2012-10-17
+            Statement: 
+              - 
+                Effect: Allow
+                Action: "s3:*"
+                Resource: arn:aws:s3:::1s-sagemaker-demos/*
+        - PolicyName: airquality-rds-policy
+          PolicyDocument: 
+            Version: 2012-10-17
+            Statement: 
+              - 
+                Effect: Allow
+                Action: "rds:*"
+                Resource: arn:aws:rds:us-west-2:842337631775:cluster:air-quality-cluster
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole
+      AssumeRolePolicyDocument: 
+        Version: 2012-10-17
+        Statement: 
+          - 
+            Effect: Allow
+            Principal: 
+              Service: 
+                - glue.amazonaws.com
+            Action: 
+              - sts:AssumeRole
+      Path: /
+
   AuroraConnection:
     Type: AWS::Glue::Connection
     Properties:
@@ -34,7 +70,7 @@ Resources:
         Description: Connection information for the Aurora instance.
         ConnectionType: JDBC
         # MatchCriteria: airquality
-        PhysicalConnectionRequirements: 
+        PhysicalConnectionRequirements:
           AvailabilityZone: !Ref AvailabilityZone
           SecurityGroupIdList: !Ref SecurityGroupIdList
           SubnetId: !Ref SubnetId
@@ -44,3 +80,18 @@ Resources:
           "PASSWORD": !Ref ConnectionPassword
         }
         Name: AirQualityDB
+  
+  UtahSubsetJob:
+    Type: AWS::Glue::Job
+    Properties:
+      Name: UtahSubsetJob
+      Role: !Ref GlueRole
+      Connections:
+        Connections:
+          - !Ref AuroraConnection
+      MaxRetries: 1
+      Description: Subset air quality data to utah entries
+      Command: 
+        Name: glueetl
+        ScriptLocation: s3://1s-sagemaker-demos/scripts/utah_subset.py
+      AllocatedCapacity: 2
