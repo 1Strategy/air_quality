@@ -2,6 +2,15 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: Creates a Glue connection object to an Aurora MySQL DB.
 
 Parameters:
+  DBName:
+    Default: airquality
+    Description: The database name created within the instance. Must be 68 characters or less
+    Type: String
+    MinLength: '1'
+    MaxLength: '68'
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: must begin with a letter and contain only alphanumeric
+      characters.
   SubnetId:
     Description: The subnet of the Aurora instance.
     Type: AWS::EC2::Subnet::Id
@@ -26,6 +35,123 @@ Parameters:
     NoEcho: true
 
 Resources:
+# Create an AWS Glue database
+  AirQualityDataCatalog:
+    Type: AWS::Glue::Database
+    Properties:
+      # The database is created in the Data Catalog for your account
+      CatalogId: !Ref AWS::AccountId   
+      DatabaseInput:
+        Name: !Ref DBName
+        Description: Database of tables with air quality data
+  
+  OzoneCrawler:
+    Type: AWS::Glue::Crawler
+    Properties:
+      Name: OzoneCrawler
+      Role: !Ref GlueRole
+      Description: Ozone data crawler
+      DatabaseName: !Ref DBName
+      Targets:
+        S3Targets:
+          - Path: s3://1s-sagemaker-demos/airquality/utah/
+      # SchemaChangePolicy:
+      #   UpdateBehavior: "UPDATE_IN_DATABASE"
+      #   DeleteBehavior: "LOG"
+      #   Configuration: {
+      #     "Version":"1.0",
+      #     "CrawlerOutput" : {
+      #       "Partitions" : {
+      #         "AddOrUpdateBehavior": "InheritFromTable"
+      #       },
+      #       "Tables": {
+      #         "AddOrUpdateBehavior" : "MergeNewColumns"
+      #       }
+      #     }
+      #   }
+  # # Create an AWS Glue table
+  # OzoneTable:
+  #   # Creating the table waits for the database to be created
+  #   DependsOn: AirQualityDataCatalog
+  #   Type: AWS::Glue::Table
+  #   Properties:
+  #     CatalogId: !Ref AWS::AccountId
+  #     DatabaseName: !Ref DBName
+  #     TableInput:
+  #       Name: ozone
+  #       Description: Ozone data
+  #       TableType: EXTERNAL_TABLE
+  #       Parameters: {
+  #         "classification": "csv"
+  #       }
+  #       StorageDescriptor:
+  #         OutputFormat: org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat
+  #         Columns:
+  #         - Name: state_code
+  #           Type: TINYINT
+  #         - Name: county_code
+  #           Type: TINYINT
+  #         - Name: site_num
+  #           Type: SMALLINT
+  #         - Name: parameter_code
+  #           Type: SMALLINT
+  #         - Name: poc
+  #           Type: TINYINT
+  #         - Name: latitude
+  #           Type: DECIMAL(8, 6)
+  #         - Name: longitude
+  #           Type: DECIMAL(8, 6)
+  #         - Name: datum
+  #           Type: VARCHAR(12)
+  #         - Name: parameter_name
+  #           Type: VARCHAR(12)
+  #         - Name: sample_duration
+  #           Type: VARCHAR(50)
+  #         - Name: pollutant_standard
+  #           Type: VARCHAR(50)
+  #         - Name: date_local
+  #           Type: DATE
+  #         - Name: units_of_measure
+  #           Type: VARCHAR(50)
+  #         - Name: event_type
+  #           Type: VARCHAR(12)
+  #         - Name: observation_count
+  #           Type: SMALLINT
+  #         - Name: observation_percent
+  #           Type: SMALLINT
+  #         - Name: arithmetic_mean
+  #           Type: INT
+  #         - Name: first_max_value
+  #           Type: INT
+  #         - Name: first_max_hour
+  #           Type: TINYINT
+  #         - Name: aqi
+  #           Type: SMALLINT
+  #         - Name: method_code
+  #           Type: VARCHAR(12)
+  #         - Name: method_name
+  #           Type: VARCHAR(12)
+  #         - Name: local_site_name
+  #           Type: VARCHAR(50)
+  #         - Name: address
+  #           Type: VARCHAR(255)
+  #         - Name: state
+  #           Type: VARCHAR(20)
+  #         - Name: county
+  #           Type: VARCHAR(20)
+  #         - Name: city
+  #           Type: VARCHAR(20)
+  #         - Name: cbsa_name
+  #           Type: VARCHAR(50)
+  #         - Name: date_of_last_change
+  #           Type: DATE
+  #         InputFormat: org.apache.hadoop.mapred.TextInputFormat
+  #         Location: s3://1s-sagemaker-demos/airquality/utah/
+  #         SerdeInfo:
+  #           Parameters:
+  #             field.delim: ","
+  #           SerializationLibrary: org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe
+
 # Build connection role for access to the RDS instance
   GlueRole: 
     Type: AWS::IAM::Role
