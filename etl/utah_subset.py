@@ -17,7 +17,7 @@ job.init(args['JOB_NAME'], args)
 
 # Tables with important attributes
 # ozone = glueContext.create_dynamic_frame.from_catalog(database = "1strategy-insights-dm", table_name = "insights_dm_stage_cached_applications", transformation_ctx = "applications")
-ozone = connection_options = {"url": "jdbc:mysql://air-quality.crwizazpv2rg.us-west-2.rds.amazonaws.com:3306/airquality", "user": "etl", "password": "thisismysupersecretpassword", "dbtable": "ozone"}
+ozone = glueContext.create_dynamic_frame_from_options("mysql", connection_options = {"url": "jdbc:mysql://air-quality.crwizazpv2rg.us-west-2.rds.amazonaws.com:3306/airquality", "user": "etl", "password": "thisismysupersecretpassword", "dbtable": "ozone"}, format=None)
 
 # Create Data Frames and Views to query
 ozone_df = ozone.toDF()
